@@ -540,6 +540,34 @@ namespace SalvageMod
                     rotor.TargetVelocityRPM = 0f; // Reset velocity memory to avoid unexpected movement upon reactivation
                     rotor.Enabled = false;
                 }
+
+                // Handle connector systems to prevent hostile station reactions upon ownership change
+                var connector = functionalBlock as IMyShipConnector;
+                if (connector != null)
+                {
+                    // Check if the grid is physically moving to prevent catastrophic physics collisions (Klang)
+                    // We check both Linear and Angular velocity from the grid physics interface
+                    bool isGridMoving = false;
+                    if (grid.Physics != null)
+                    {
+                        isGridMoving = grid.Physics.LinearVelocity.LengthSquared() > 0.1 || 
+                                       grid.Physics.AngularVelocity.LengthSquared() > 0.1;
+                    }
+
+                    // Safe Disconnection Logic: Only disconnect if the wreck is relatively stable
+                    if (connector.Status == Sandbox.ModAPI.Ingame.MyShipConnectorStatus.Connected)
+                    {
+                        if (!isGridMoving)
+                        {
+                            // Safe to disconnect since the structure is stationary
+                            connector.Disconnect();
+                        }
+                        // If it is moving, we preserve the lock so the player doesn't instantly crash or shear off
+                    }
+
+                    // Always disable the connector block to cut power and kill the magnetic attraction force
+                    connector.Enabled = false;
+                }
             }
         }
 

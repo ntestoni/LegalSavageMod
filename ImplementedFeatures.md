@@ -20,12 +20,24 @@ This document outlines the features and architecture that have been successfully
 * **Modular Interface-Based Valuation:** Created an isolated pricing matrix function (`GetSpecialBlockValue`) that scans the grid block-by-block using C# interface pattern matching (`IMyReactor`, `IMyJumpDrive`, `IMyRefinery`, `IMyLargeTurretBase`, etc.). This adds dynamic technological surcharges to the final licensing fee and natively supports modded blocks.
 * **DRY Code Refactoring:** Unified the block scanning and mass extraction logic into a single shared helper function (`AnalyzeGridStructure`), allowing for independent scaling factors (`smallGridScale`, `largeGridScale`, `stationScale`) per grid type.
 
-## 4. Automated Safety Lockdown Routine
+## 4. Wreck Integrity Pricing Surcharges (Debris Factor)
+* **Dynamic Health & Progress Assessment:** Refactored the block-by-block valuation within `AnalyzeGridStructure` to leverage the `IMySlimBlock` API. 
+* **Adaptive Surcharge Scaling:** The engine extracts structural data via `slimBlock.CurrentDamage` and `slimBlock.MaxIntegrity` to establish a `healthRatio`. This is combined with `slimBlock.BuildLevelRatio` to form an `integrityModifier`. Heavily damaged, uncompleted, or hitted blocks have their technological surcharges scaled down proportionally, ensuring players never pay full price for ruined components.
+
+## 5. Advanced Two-Step Ownership Overrides
+* **Hacked & Unowned Block Adaptation:** Addressed a critical core engine behavior where functional blocks grinded below their hacking threshold drop ownership to `0`, causing native grid-wide methods to skip them.
+* **Targeted Terminal Sweep:** Implemented a post-transfer loop filtering for `IMyTerminalBlock` instances whose ownership did not sync. The script casts these exceptions to explicitly force ownership registration, matching player parameters.
+
+## 6. Automated Safety Lockdown Routine
 Upon a successful transaction and synchronous grid ownership transfer, a safety protocol cycles through all functional blocks (`IMyFunctionalBlock`) across the main grid and all attached sub-grids to prevent immediate accidents or friendly fire:
 * **Weapons & AI Turrets:** Automatically disabled (`Enabled = false`) to neutralize defensive systems and custom modded weapons (e.g., *Consolidation Armament*).
 * **Automation Systems:** Programmable Blocks and Timer Blocks are shut down to halt defensive or self-repairing NPC scripts.
 * **Thrusters & Gyroscopes:** Absolute thrust overrides are zeroed out (`ThrustOverride = 0f`), gyroscope override states are turned off (`GyroOverride = false`), and rotational axes are completely reset before shutting down the blocks to prevent the ship from drifting or spinning out of control.
 * **Mechanical Articulations (Rotors & Hinges):** Safety brakes are engaged (`RotorLock = true`), target velocities are reset to `0 RPM`, and blocks are powered down to eliminate mechanical oscillations and physical damage ("Klang").
 
-## 5. User Interface (UI) Feedback
+## 7. User Interface (UI) Feedback
 * **Mission Screen Contexts:** Integrated the game's native `ShowMissionScreen` API to present polished pop-up dialogs for contract terms, purchase confirmation, account balance errors, and transaction success reports.
+
+## 8. Connector Friction & Safety Filtering
+* **Velocity-Aware Disconnection:** The safety lockdown system checks the target grid's `LinearVelocity` and `AngularVelocity` before acting on connectors. If the grid is moving, the physical connection lock is preserved to prevent immediate grid shearing or collision damage.
+* **Magnetic Force Suppression:** Forcing `Enabled = false` on connected or near-locked connectors eliminates their native magnetic attraction pull, preventing dangerous physics oscillations ("Klang") during ownership transitions.
