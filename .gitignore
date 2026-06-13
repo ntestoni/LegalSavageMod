@@ -1,0 +1,25 @@
+## Visual Studio Tooling (User & Temporary files)
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## Compilation Outputs
+Bin/
+bin/
+Obj/
+obj/
+*.dll
+*.pdb
+*.exe
+
+## Space Engineers & VRAGE Generated Files
+*.log
+*.sbmi
+*_cache/
+*.bak
+
+## OS Generated Files
+.DS_Store
+Thumbs.db
