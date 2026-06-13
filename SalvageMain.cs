@@ -187,11 +187,11 @@ namespace SalvageMod
             // Iterate through the grid structure tree leveraging specific cost routers
             foreach (var subGrid in connectedGrids)
             {
-                // Accumulate true grid mass if physics engine is active
-                totalMass += (subGrid.Physics != null) ? subGrid.Physics.Mass : 0f;
+                float subGridMass;
 
-                // Accumulate cost calculated by individual grid type handlers
-                totalCost += GetBaseCostByGridType(subGrid);
+                // Accumulate cost and extract individual sub-grid mass via the type router
+                totalCost += GetBaseCostByGridType(subGrid, out subGridMass);
+                totalMass += subGridMass;
             }
 
             // Add an overhead mechanical complexity tax for articulated assemblies
@@ -203,68 +203,122 @@ namespace SalvageMod
             return totalCost;
         }
 
-        private double GetBaseCostByGridType(IMyCubeGrid grid)
+        private double GetBaseCostByGridType(IMyCubeGrid grid, out float gridMass)
         {
             // Static structures (Physics engine disabled by default by VRAGE)
             if (grid.IsStatic)
             {
-                return CalculateStationCost(grid);
+                return CalculateStationCost(grid, out gridMass);
             }
 
             // Mobile grids, route calculations based on block scaling definitions
             switch (grid.GridSizeEnum)
             {
                 case MyCubeSize.Large:
-                    return CalculateLargeGridCost(grid);
+                    return CalculateLargeGridCost(grid, out gridMass);
 
                 case MyCubeSize.Small:
-                    return CalculateSmallGridCost(grid);
+                    return CalculateSmallGridCost(grid, out gridMass);
 
                 default:
-                    return 5000.0; // Fail-safe fallback value
+                    gridMass = 5000f;
+                    return 5000.0;
             }
+        }
+
+        // --- PRICING MATRIX FUNCTION ---
+        // --- PRICING MATRIX FUNCTION ---
+        private double GetSpecialBlockValue(IMyCubeBlock fatBlock)
+        {
+            if (fatBlock == null) return 0.0;
+
+            // High-tier Power Generation & FTL
+            if (fatBlock is IMyReactor) return 150000.0;
+            if (fatBlock is IMyJumpDrive) return 250000.0;
+
+            // Production & Logistics
+            if (fatBlock is IMyRefinery) return 90000.0;
+            if (fatBlock is IMyAssembler) return 45000.0;
+            if (fatBlock is IMyGasGenerator) return 20000.0; // H2/O2 Generator
+            if (fatBlock is IMyGasTank) return 15000.0;
+
+            // Weapons & Defense (Covers vanilla and mods inheriting from core turret bases)
+            if (fatBlock is IMyLargeTurretBase) return 35000.0;
+
+            // Fixed guns and small rocket launchers
+            if (fatBlock is IMyUserControllableGun) return 15000.0;
+
+            return 0.0;
+        }
+        private double AnalyzeGridStructure(IMyCubeGrid grid, float fallbackMass, double scaleFactor, out float gridMass)
+        {
+            gridMass = (grid.Physics != null) ? grid.Physics.Mass : 0f;
+
+            // Static/physics-disabled fallback routine for the specific grid type
+            if (gridMass <= 0f)
+                gridMass = fallbackMass;
+
+            double specialBlocksCost = 0.0;
+
+            // Temporary list to scan blocks within this specific grid structure
+            var blockList = new System.Collections.Generic.List<IMySlimBlock>();
+            grid.GetBlocks(blockList);
+
+            foreach (var slimBlock in blockList)
+            {
+                // Skip armor blocks since they do not have advanced technological logic
+                if (slimBlock.FatBlock == null) continue;
+
+                // Query the valuation matrix and apply the specific grid scale factor
+                var typeId = slimBlock.FatBlock.BlockDefinition.TypeId;
+                specialBlocksCost += GetSpecialBlockValue(slimBlock.FatBlock) * scaleFactor;
+            }
+
+            return specialBlocksCost;
         }
 
         // --- TYPE-SPECIFIC COST HANDLERS ---
-
-        private double CalculateSmallGridCost(IMyCubeGrid grid)
+        private double CalculateSmallGridCost(IMyCubeGrid grid, out float gridMass)
         {
-            float mass = (grid.Physics != null) ? grid.Physics.Mass : 0f;
-
-            // Static/physics-disabled fallback routine for small vehicles
-            if (mass <= 0f)
-                mass = 15000f; // 15 Metric Tons standard estimate (e.g., standard rover/fighter)
-
+            // Configuration factors to scale pricing behavior for small grids
             double costPerKg = 5.0;
-            return mass * costPerKg;
+            double smallGridScale = 1.0;
+            float fallbackMass = 15000f;
+
+            // Delegate structural block scan and mass extraction to the core helper engine
+            double specialBlocksCost = AnalyzeGridStructure(grid, fallbackMass, smallGridScale, out gridMass);
+            double baseCost = gridMass * costPerKg;
+
+            return baseCost + specialBlocksCost;
         }
 
-        private double CalculateLargeGridCost(IMyCubeGrid grid)
+        private double CalculateLargeGridCost(IMyCubeGrid grid, out float gridMass)
         {
-            float mass = (grid.Physics != null) ? grid.Physics.Mass : 0f;
-
-            // Static/physics-disabled fallback routine for large ships
-            if (mass <= 0f)
-                mass = 500000f; // 500 Metric Tons standard estimate (e.g., medium cargo freighter)
-
+            // Configuration factors to scale pricing behavior for large grids
             double costPerKg = 1.5;
-            return mass * costPerKg;
+            double largeGridScale = 1.0;
+            float fallbackMass = 500000f;
+
+            // Delegate structural block scan and mass extraction to the core helper engine
+            double specialBlocksCost = AnalyzeGridStructure(grid, fallbackMass, largeGridScale, out gridMass);
+            double baseCost = gridMass * costPerKg;
+
+            return baseCost + specialBlocksCost;
         }
 
-        private double CalculateStationCost(IMyCubeGrid grid)
+        private double CalculateStationCost(IMyCubeGrid grid, out float gridMass)
         {
-            float mass = (grid.Physics != null) ? grid.Physics.Mass : 0f;
+            // Configuration factors to scale pricing behavior for static outposts
+            double costPerKg = 0.8;
+            double stationScale = 1.0; // Ready for independent station component scaling
+            double stationTax = 75000.0;
+            float fallbackMass = 1200000f;
 
-            // Handling routine for unpowered or anchored outposts
-            if (mass <= 0f)
-            {
-                mass = 1200000f; // 1,200 Metric Tons standard estimate (e.g., small industrial outpost)
-            }
+            // Delegate structural block scan and mass extraction to the core helper engine
+            double specialBlocksCost = AnalyzeGridStructure(grid, fallbackMass, stationScale, out gridMass);
+            double baseCost = (gridMass * costPerKg) + stationTax;
 
-            double costPerKg = 0.8; // Reduced per-Kg cost due to static placement...
-            double stationTax = 75000.0; // ...balanced by a fixed administrative grid occupancy fee
-
-            return (mass * costPerKg) + stationTax;
+            return baseCost + specialBlocksCost;
         }
 
         private void OnSalvageScreenClosed(ResultEnum result, long playerId, long finalCost, IMyCubeGrid grid)
@@ -335,9 +389,9 @@ namespace SalvageMod
                     if (functionalBlock == null) continue;
 
                     // Typecast checks using the correct namespaces for core systems and automation components
-                    bool isTurret = functionalBlock is Sandbox.ModAPI.IMyLargeTurretBase;
-                    bool isWeapon = functionalBlock is Sandbox.ModAPI.IMyUserControllableGun;
-                    bool isProgrammable = functionalBlock is Sandbox.ModAPI.IMyProgrammableBlock;
+                    bool isTurret = functionalBlock is IMyLargeTurretBase;
+                    bool isWeapon = functionalBlock is IMyUserControllableGun;
+                    bool isProgrammable = functionalBlock is IMyProgrammableBlock;
                     bool isTimer = functionalBlock is SpaceEngineers.Game.ModAPI.IMyTimerBlock; // Corrected namespace
 
                     // Safely disable hazardous weapon, script, and automation systems
@@ -376,7 +430,7 @@ namespace SalvageMod
                 }
             }
             // 3. VISUAL FEEDBACK
-            ShowPopupMessage("SALVAGE PERMIT GRANTED", $"Transaction successful!\n{finalCost.ToString("N0")} SC has been deducted from your balance.\n\nThe entire grid structure is now legally registered under your ownership.");
+            ShowPopupMessage("SALVAGE PERMIT GRANTED", $"Transaction successful!\n{finalCost.ToString("N0")} SC have been deducted from your balance.\n\nThe entire grid structure is now legally registered under your ownership.");
         }
 
         // --- UI HELPERS ---
