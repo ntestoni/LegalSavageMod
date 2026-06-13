@@ -227,29 +227,52 @@ namespace SalvageMod
         }
 
         // --- PRICING MATRIX FUNCTION ---
-        // --- PRICING MATRIX FUNCTION ---
-        private double GetSpecialBlockValue(IMyCubeBlock fatBlock)
+        private double GetSpecialBlockValue(VRage.Game.ModAPI.IMyCubeBlock fatBlock)
         {
             if (fatBlock == null) return 0.0;
 
-            // High-tier Power Generation & FTL
+            // 1. High-tier Power Generation & FTL
             if (fatBlock is IMyReactor) return 150000.0;
             if (fatBlock is IMyJumpDrive) return 250000.0;
+            if (fatBlock is IMyBatteryBlock) return 30000.0;
+            if (fatBlock is IMySolarPanel) return 10000.0;
 
-            // Production & Logistics
+            // 2. Production & Advanced Logistics
             if (fatBlock is IMyRefinery) return 90000.0;
             if (fatBlock is IMyAssembler) return 45000.0;
             if (fatBlock is IMyGasGenerator) return 20000.0; // H2/O2 Generator
             if (fatBlock is IMyGasTank) return 15000.0;
+            if (fatBlock is IMyCargoContainer) return 25000.0;
+            if (fatBlock is IMyConveyorSorter) return 12000.0; // Added sorting systems
 
-            // Weapons & Defense (Covers vanilla and mods inheriting from core turret bases)
+            // 3. Weapons & Defense (Covers vanilla and mods inheriting from core turret bases)
             if (fatBlock is IMyLargeTurretBase) return 35000.0;
+            if (fatBlock is IMyUserControllableGun) return 15000.0; // Fixed guns/launchers
+            if (fatBlock is IMyWarhead) return 50000.0;
 
-            // Fixed guns and small rocket launchers
-            if (fatBlock is IMyUserControllableGun) return 15000.0;
+            // 4. Control Systems & Cockpits
+            if (fatBlock is IMyCockpit) return 20000.0; // Cryo pods, flight seats, cockpits
+            if (fatBlock is IMyRemoteControl) return 15000.0;
+            if (fatBlock is IMyBeacon) return 10000.0;
+            if (fatBlock is IMyRadioAntenna) return 12000.0;
 
+            // 5. Automation, Utility & Safety Locks
+            if (fatBlock is IMyShipConnector) return 8000.0;
+            if (fatBlock is IMyProjector) return 30000.0;
+            if (fatBlock is IMyProgrammableBlock) return 40000.0;
+            if (fatBlock is IMyTimerBlock) return 5000.0;
+            if (fatBlock is IMySensorBlock) return 5000.0;
+            if (fatBlock is IMyMedicalRoom) return 60000.0; // Medical rooms and survival kits
+            if (fatBlock is IMyAirVent) return 4000.0;
+
+            // 6. Basic Terminal Interfaces
+            if (fatBlock is IMyControlPanel) return 1500.0;
+            if (fatBlock is IMyButtonPanel) return 2500.0;
+
+            // Any functional block not explicitly listed falls back to zero surcharge (mass only)
             return 0.0;
         }
+
         private double AnalyzeGridStructure(IMyCubeGrid grid, float fallbackMass, double scaleFactor, out float gridMass)
         {
             gridMass = (grid.Physics != null) ? grid.Physics.Mass : 0f;
@@ -269,9 +292,17 @@ namespace SalvageMod
                 // Skip armor blocks since they do not have advanced technological logic
                 if (slimBlock.FatBlock == null) continue;
 
-                // Query the valuation matrix and apply the specific grid scale factor
-                var typeId = slimBlock.FatBlock.BlockDefinition.TypeId;
-                specialBlocksCost += GetSpecialBlockValue(slimBlock.FatBlock) * scaleFactor;
+                // Calculate the real biological health ratio based on component damage
+                float maxHp = slimBlock.MaxIntegrity;
+                float currentDamage = slimBlock.CurrentDamage;
+                float healthRatio = (maxHp > 0f) ? Math.Max(0f, (maxHp - currentDamage) / maxHp) : 1f;
+
+                // Combine real combat health with grinder deconstruction level ratio
+                float integrityModifier = healthRatio * slimBlock.BuildLevelRatio;
+
+                // Query the valuation matrix, apply the integrity modifier and the grid scale factor
+                double blockBaseValue = GetSpecialBlockValue(slimBlock.FatBlock);
+                specialBlocksCost += (blockBaseValue * integrityModifier) * scaleFactor;
             }
 
             return specialBlocksCost;
