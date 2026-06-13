@@ -440,9 +440,6 @@ namespace SalvageMod
                 // Compute the owner of the current subGrid
                 long majorityOwnerId = (subGrid.BigOwners != null && subGrid.BigOwners.Count > 0) ? subGrid.BigOwners[0] : 0;
 
-                var blockList = new System.Collections.Generic.List<IMySlimBlock>();
-                subGrid.GetBlocks(blockList);
-
                 // Safety Filter: Skip this sub-grid entirely if it doesn't belong to the target faction
                 // (Prevents stealing player ships, neutral trading stations, or unrelated third-party grids)
                 if (!ownerFaction.IsMember(majorityOwnerId))
@@ -453,6 +450,34 @@ namespace SalvageMod
                 // Step 2: Safe Transfer of the validated grid
                 // This changes the ownership of all blocks on this specific grid to the player
                 subGrid.ChangeGridOwnership(playerIdentityId, MyOwnershipShareModeEnum.Faction);
+
+                // Hacked/unowned blocks are unaffected and must be processed separately
+                // We use a 2-step approach since ChangeGridOwnership():
+                // 1. autmatically updates BigOwners for the whole grid,
+                // 2. sends only one network packet relative to the whole grid,
+                // 3. forces the refresh of terminals for all connected players.
+
+                var blockList = new System.Collections.Generic.List<IMySlimBlock>();
+                subGrid.GetBlocks(blockList);
+
+                foreach (var slimBlock in blockList)
+                {
+                    // Skip armor blocks and blocks without a physical fatblock instance
+                    if (slimBlock.FatBlock == null) continue;
+
+                    // Check if the block is a terminal/functional block, but its OwnerId was either ignored 
+                    // by the global routine (hacked/incomplete blocks with Owner 0) or failed to sync properly
+                    if (slimBlock.FatBlock is Sandbox.ModAPI.Ingame.IMyTerminalBlock && slimBlock.FatBlock.OwnerId != playerIdentityId)
+                    {
+                        // Cast to the concrete game object class to access the actual ownership modification method
+                        var cubeBlock = slimBlock.FatBlock as Sandbox.Game.Entities.MyCubeBlock;
+                        if (cubeBlock != null)
+                        {
+                            // Forcefully override ownership and share mode on this specific block
+                            cubeBlock.ChangeOwner(playerIdentityId, VRage.Game.MyOwnershipShareModeEnum.Faction);
+                        }
+                    }
+                }
 
                 // Step 3: Run the safety lockdown routine ONLY on this validated grid's systems
                 ApplySafetyLockdownToGrid(subGrid);
