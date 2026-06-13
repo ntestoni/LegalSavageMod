@@ -1,5 +1,6 @@
 ﻿using System;
 using Sandbox.ModAPI;
+using SpaceEngineers.Game.ModAPI;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.Game;
@@ -165,7 +166,7 @@ namespace SalvageMod
         // --- CALCULATION ENGINE ---
         private double CalculateTotalStructureData(IMyCubeGrid hitGrid, out int subGridCount, out float totalMass)
         {
-            // 1. Retrieve the entire tree of physically connected grids
+            // Retrieve the entire tree of physically connected grids
             var connectedGrids = new System.Collections.Generic.List<IMyCubeGrid>();
             var gridGroup = MyAPIGateway.GridGroups.GetGridGroup(GridLinkTypeEnum.Physical, hitGrid);
 
@@ -178,12 +179,12 @@ namespace SalvageMod
                 connectedGrids.Add(hitGrid);
             }
 
-            // 2. Compute telemetry output values for UI and Debugging
+            // Compute telemetry output values for UI and Debugging
             subGridCount = connectedGrids.Count - 1;
             totalMass = 0f;
             double totalCost = 0;
 
-            // 3. Iterate through the grid structure tree leveraging specific cost routers
+            // Iterate through the grid structure tree leveraging specific cost routers
             foreach (var subGrid in connectedGrids)
             {
                 // Accumulate true grid mass if physics engine is active
@@ -204,13 +205,13 @@ namespace SalvageMod
 
         private double GetBaseCostByGridType(IMyCubeGrid grid)
         {
-            // Case 1: Static structures (Physics engine disabled by default by VRAGE)
+            // Static structures (Physics engine disabled by default by VRAGE)
             if (grid.IsStatic)
             {
                 return CalculateStationCost(grid);
             }
 
-            // Case 2: Mobile grids, route calculations based on block scaling definitions
+            // Mobile grids, route calculations based on block scaling definitions
             switch (grid.GridSizeEnum)
             {
                 case MyCubeSize.Large:
@@ -280,7 +281,7 @@ namespace SalvageMod
                 return;
             }
 
-            // 1. BANKING OPERATIONS (TryGetBalanceInfo API)
+            // 1. BANKING OPERATIONS
             long playerBalance = 0;
 
             if (player.TryGetBalanceInfo(out playerBalance))
@@ -296,11 +297,11 @@ namespace SalvageMod
             }
             else
             {
-                MyAPIGateway.Utilities.ShowNotification("Error: Could not retrieve balance info.", 5000, MyFontEnum.Red);
+                ShowPopupMessage("TRANSACTION ERROR", "Could not safely retrieve account balance information.");
                 return;
             }
 
-            // 2. GRID OWNERSHIP TRANSFER SYSTEM OVER THE ENTIRE TREE
+            // 2. GRID OWNERSHIP TRANSFER & SAFETY LOCKDOWN SYSTEM
             System.Collections.Generic.List<IMyCubeGrid> gridsToTransfer = new System.Collections.Generic.List<IMyCubeGrid>();
             var transferGroup = MyAPIGateway.GridGroups.GetGridGroup(GridLinkTypeEnum.Physical, grid);
 
@@ -313,12 +314,67 @@ namespace SalvageMod
                 gridsToTransfer.Add(grid);
             }
 
-            // Apply absolute ownership rewrite across all sub-grids synchronously
+            // Create a temporary list to store blocks for the safety lockdown routine
+            System.Collections.Generic.List<IMySlimBlock> gridBlocks = new System.Collections.Generic.List<IMySlimBlock>();
             foreach (var subGrid in gridsToTransfer)
             {
+                // Apply absolute ownership rewrite across all sub-grids synchronously
                 subGrid.ChangeGridOwnership(playerId, MyOwnershipShareModeEnum.None);
-            }
 
+                // Fetch all slim blocks inside the current sub-grid
+                gridBlocks.Clear();
+                subGrid.GetBlocks(gridBlocks);
+
+                foreach (var slimBlock in gridBlocks)
+                {
+                    // Armor blocks do not have a FatBlock component. Skip them safely.
+                    if (slimBlock.FatBlock == null) continue;
+
+                    // Check if the block is a functional terminal block (can be turned on/off)
+                    var functionalBlock = slimBlock.FatBlock as Sandbox.ModAPI.IMyFunctionalBlock;
+                    if (functionalBlock == null) continue;
+
+                    // Typecast checks using the correct namespaces for core systems and automation components
+                    bool isTurret = functionalBlock is Sandbox.ModAPI.IMyLargeTurretBase;
+                    bool isWeapon = functionalBlock is Sandbox.ModAPI.IMyUserControllableGun;
+                    bool isProgrammable = functionalBlock is Sandbox.ModAPI.IMyProgrammableBlock;
+                    bool isTimer = functionalBlock is SpaceEngineers.Game.ModAPI.IMyTimerBlock; // Corrected namespace
+
+                    // Safely disable hazardous weapon, script, and automation systems
+                    if (isTurret || isWeapon || isProgrammable || isTimer)
+                    {
+                        functionalBlock.Enabled = false;
+                    }
+
+                    // Handle thruster systems (Disable block and clear absolute thrust override values)
+                    var thruster = functionalBlock as Sandbox.ModAPI.IMyThrust;
+                    if (thruster != null)
+                    {
+                        thruster.ThrustOverride = 0f;
+                        thruster.Enabled = false;
+                    }
+
+                    // Handle gyroscope systems (Disable block and completely reset rotation override states)
+                    var gyro = functionalBlock as Sandbox.ModAPI.IMyGyro;
+                    if (gyro != null)
+                    {
+                        gyro.GyroOverride = false;
+                        gyro.Pitch = 0f;
+                        gyro.Yaw = 0f;
+                        gyro.Roll = 0f;
+                        gyro.Enabled = false;
+                    }
+
+                    // Handle stator systems (Disable block, engage safety brake and reset target velocity)
+                    var rotor = functionalBlock as Sandbox.ModAPI.IMyMotorStator;
+                    if (rotor != null)
+                    {
+                        rotor.RotorLock = true; // Engage the safety brake to completely freeze the joint
+                        rotor.TargetVelocityRPM = 0f; // Reset velocity memory to avoid unexpected movement upon reactivation
+                        rotor.Enabled = false;
+                    }
+                }
+            }
             // 3. VISUAL FEEDBACK
             ShowPopupMessage("SALVAGE PERMIT GRANTED", $"Transaction successful!\n{finalCost.ToString("N0")} SC has been deducted from your balance.\n\nThe entire grid structure is now legally registered under your ownership.");
         }
