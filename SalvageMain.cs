@@ -65,7 +65,17 @@ namespace SalvageMod
                     return;
                 }
 
+                // --- Ownnership check
+                long playerId = MyAPIGateway.Session.Player.IdentityId;
                 long ownerId = targetGrid.BigOwners[0];
+
+                // If the player already owns the grid, stop the transaction
+                if (ownerId == playerId)
+                {
+                    MyAPIGateway.Utilities.ShowNotification("You already own this grid. No salvage permit needed!", 4000, MyFontEnum.Green);
+                    return;
+                }
+
                 IMyFaction npcFaction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(ownerId);
 
                 if (npcFaction == null)
@@ -77,6 +87,16 @@ namespace SalvageMod
                 if (!npcFaction.IsEveryoneNpc())
                 {
                     MyAPIGateway.Utilities.ShowNotification($"This grid belongs to a real player faction [{npcFaction.Tag}]. Salvage permit unavailable.", 4000, MyFontEnum.Red);
+                    return;
+                }
+
+                // --- Reputation wall
+                int reputation = MyAPIGateway.Session.Factions.GetReputationBetweenPlayerAndFaction(playerId, npcFaction.FactionId);
+
+                // If the player is hostile (reputation below -500), deny the contract
+                if (reputation < -500)
+                {
+                    MyAPIGateway.Utilities.ShowNotification($"Transaction denied! You are hostile towards {npcFaction.Name} [{npcFaction.Tag}].", 5000, MyFontEnum.Red);
                     return;
                 }
 
