@@ -61,7 +61,7 @@ namespace SalvageMod
 
                 if (targetGrid.BigOwners == null || targetGrid.BigOwners.Count == 0)
                 {
-                    MyAPIGateway.Utilities.ShowNotification("This wreck is unowned. You can salvage it freely!", 4000, MyFontEnum.Green);
+                    ShowPopupMessage("SALVAGE REPORT", "This wreck is unowned.\nYou can salvage it freely without paying any licensing fee!");
                     return;
                 }
 
@@ -72,7 +72,7 @@ namespace SalvageMod
                 // If the player already owns the grid, stop the transaction
                 if (ownerId == playerId)
                 {
-                    MyAPIGateway.Utilities.ShowNotification("You already own this grid. No salvage permit needed!", 4000, MyFontEnum.Green);
+                    ShowPopupMessage("SALVAGE REPORT", "You already own this grid.\nNo salvage permit needed!");
                     return;
                 }
 
@@ -80,13 +80,13 @@ namespace SalvageMod
 
                 if (npcFaction == null)
                 {
-                    MyAPIGateway.Utilities.ShowNotification("Unknown owner or invalid faction.", 4000, MyFontEnum.Red);
+                    ShowPopupMessage("SALVAGE ERROR", "Unknown owner or invalid faction entity.");
                     return;
                 }
 
                 if (!npcFaction.IsEveryoneNpc())
                 {
-                    MyAPIGateway.Utilities.ShowNotification($"This grid belongs to a real player faction [{npcFaction.Tag}]. Salvage permit unavailable.", 4000, MyFontEnum.Red);
+                    ShowPopupMessage("SALVAGE REJECTED", $"This grid belongs to a real player faction [{npcFaction.Tag}].\nSalvage permit negotiations are unavailable.");
                     return;
                 }
 
@@ -96,7 +96,7 @@ namespace SalvageMod
                 // If the player is hostile (reputation below -500), deny the contract
                 if (reputation < -500)
                 {
-                    MyAPIGateway.Utilities.ShowNotification($"Transaction denied! You are hostile towards {npcFaction.Name} [{npcFaction.Tag}].", 5000, MyFontEnum.Red);
+                    ShowPopupMessage("TRANSACTION DENIED", $"The faction {npcFaction.Name} [{npcFaction.Tag}] refuses to negotiate with you.\nReason: Hostile standing (Reputation below -500).");
                     return;
                 }
 
@@ -104,7 +104,7 @@ namespace SalvageMod
             }
             else
             {
-                MyAPIGateway.Utilities.ShowNotification("No grid in sight. Please move closer.", 3000, MyFontEnum.Red);
+                ShowPopupMessage("SALVAGE ERROR", "No grid in sight.\nPlease move closer to your target wreck (Max 50 meters).");
             }
         }
 
@@ -151,6 +151,7 @@ namespace SalvageMod
             body += $"• Licensing Fee: {finalCost.ToString("N0")} SC\n\n" +
                     $"Do you accept and wish to transfer the funds?";
 
+            // TODO: change "SalvageContract" to something more fancy
             MyAPIGateway.Utilities.ShowMissionScreen(
                 title,
                 "SalvageContract",
@@ -275,7 +276,7 @@ namespace SalvageMod
             var player = MyAPIGateway.Session.Player;
             if (player == null)
             {
-                MyAPIGateway.Utilities.ShowNotification("Error: Player not found.", 5000, MyFontEnum.Red);
+                ShowPopupMessage("TRANSACTION ERROR", "Local player data entity could not be resolved.");
                 return;
             }
 
@@ -286,7 +287,7 @@ namespace SalvageMod
             {
                 if (playerBalance < finalCost)
                 {
-                    MyAPIGateway.Utilities.ShowNotification("Transaction declined: Insufficient Space Credits!", 5000, MyFontEnum.Red);
+                    ShowPopupMessage("TRANSACTION DECLINED", $"Insufficient Space Credits!\nRequired: {finalCost.ToString("N0")} SC\nYour Balance: {playerBalance.ToString("N0")} SC");
                     return;
                 }
 
@@ -319,7 +320,21 @@ namespace SalvageMod
             }
 
             // 3. VISUAL FEEDBACK
-            MyAPIGateway.Utilities.ShowNotification($"Permit granted! -{finalCost.ToString("N0")} SC. The wreck is now yours.", 5000, MyFontEnum.Green);
+            ShowPopupMessage("SALVAGE PERMIT GRANTED", $"Transaction successful!\n{finalCost.ToString("N0")} SC has been deducted from your balance.\n\nThe entire grid structure is now legally registered under your ownership.");
+        }
+
+        // --- UI HELPERS ---
+        private void ShowPopupMessage(string title, string message)
+        {
+            // TODO: change "SalvageStatus" to something more fancy
+            MyAPIGateway.Utilities.ShowMissionScreen(
+                title,
+                "SalvageStatus",
+                null,
+                message,
+                null,
+                "OK"
+            );
         }
     }
 }
