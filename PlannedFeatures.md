@@ -2,10 +2,6 @@
 
 This document lists the prioritized functionalities, performance optimizations, and edge-case handlings planned for future updates of the Legal Salvage Mod. Contribution to these areas is highly welcome.
 
-## 1. External Configuration File Support (INI Configuration)
-* **Objective:** Decouple all the numerical values and configuration factors from the hardcoded C# script, making the mod fully customizable for server administrators and players.
-* **Implementation Plan:** Create an input/output routine that automatically generates a default `Config.ini` file inside the world storage directory upon the mod's first initialization. Mod functions will be refactored to read coefficients directly from this dictionary, paving the way for eventual *Rich HUD* or in-game menu UI integrations (similar to *Build Vision*).
-
-## 2. Fully implement Player customizable and toggleable features
-* **Ojective:** Allow to customize or turn off entirely most of this mod's features
-* **Implementation Plan:** Using the TextAPI mod menu, the user will open chat and press F2, then a button must appear top-left. Alternatively the user can edit the `Config.ini` file inside the world storage directory which can then be reloaded mid-game using '/salvage reload' in chat.
+## 1. Rich In-Game Configuration Menu Layout (TextAPI Framework)
+* **Objective:** Allow client users and hosts to configure core mod options or visualize detailed financial diagnostic charts using a real-time visual interface rather than manual text editor adjustments.
+* **Implementation Plan:** Integrate the TextAPI mod configuration infrastructure. This template intercepts client menu buttons when typing F2 inside text prompts, rendering a contextual overlay that allows toggle controls over calculation components (e.g., dynamically turning on/off block pricing surcharges or adjusting mass per-Kilo variables directly from the game screen).

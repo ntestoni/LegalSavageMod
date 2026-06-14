@@ -7,6 +7,7 @@ In the game, some random encounters involve wrecks belonging to specific faction
 
 # Files and Contents
 * The `SalvageMain.cs` file, written in C#, contains the core script code.
+* The 'SalvageConfig.cs' file, written in C#, contains the code for script configuration.
 * The `PlannedFeatures.md` file, written in Markdown, lists the features left to implement.
 * The `ImplementedFeatures.md` file, written in Markdown, lists the features already successfully implemented.
 
@@ -15,6 +16,9 @@ In the game, some random encounters involve wrecks belonging to specific faction
 * All dialogue phrases or UI text lines must be written in English or abstracted into localization strings to facilitate future translations into other languages.
 
 # Programming Style & Guidelines
+* Always consider the latest version of the project files.
+* Modify project files the least possible to comply with my requests.
+* If it becomes absolutely necessary to refactor project files, explain the reasoning behind it before doing it and ask for explicit approval.
 * Always prioritize the public interface exposed explicitly for mods over the internal properties or concrete classes of Keen's underlying source code.
 * If it becomes absolutely necessary to use internal properties or unexposed game-engine classes, verify beforehand that the code can safely execute within a modded environment.
 * If internal properties are used, inform me of this architectural choice and explain the underlying technical reasons.

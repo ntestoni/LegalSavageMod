@@ -25,9 +25,8 @@ namespace SalvageMod
         public double MinReputationModifier { get; private set; } = 0.5;
         public double MaxReputationModifier { get; private set; } = 3.0;
         public double ArticulatedAssemblyTax { get; private set; } = 2500.0;
-        public double StationTax { get; private set; } = 75000.0;
 
-        // --- SECTION: GridMassMultipliers (Preserved from layout) ---
+        // --- SECTION: GridMassMultipliers ---
         public double SmallGridScale { get; private set; } = 0.5;
         public double LargeGridScale { get; private set; } = 2.0;
         public double StationScale { get; private set; } = 5.0;
@@ -41,6 +40,7 @@ namespace SalvageMod
         public double LargeGridFallbackMass { get; private set; } = 500000.0;
         public double StationCostPerKg { get; private set; } = 0.8;
         public double StationFallbackMass { get; private set; } = 1200000.0;
+        public double StationTax { get; private set; } = 75000.0;
 
         // --- SECTION: SpecialBlockPrices ---
         public double PriceReactor { get; private set; } = 500000;

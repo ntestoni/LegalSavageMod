@@ -41,3 +41,11 @@ Upon a successful transaction and synchronous grid ownership transfer, a safety 
 ## 8. Connector Friction & Safety Filtering
 * **Velocity-Aware Disconnection:** The safety lockdown system checks the target grid's `LinearVelocity` and `AngularVelocity` before acting on connectors. If the grid is moving, the physical connection lock is preserved to prevent immediate grid shearing or collision damage.
 * **Magnetic Force Suppression:** Forcing `Enabled = false` on connected or near-locked connectors eliminates their native magnetic attraction pull, preventing dangerous physics oscillations ("Klang") during ownership transitions.
+
+## 9. External Configuration File Support (INI Engine)
+* **Sandbox-Compliant I/O:** Utilizes the public stable `MyAPIGateway.Utilities.ReadFileInLocalStorage` and `WriteFileInLocalStorage` interfaces to safely process persistent configuration storage inside the active world space folder without sandbox restrictions or security containment violations.
+* **Auto-Generation Template:** Automatically deploys a well-formatted `SalvageConfig.ini` spreadsheet file inside the active server storage repository during initial subsystem setups if no equivalent file structure is present.
+* **Decoupled Financial Balancing:** Externalized runtime mathematical variables, replacing hardcoded coefficients in pricing engines. Dynamic multipliers for Small Grids, Large Grids, and Stations, alongside technological component surcharges (Reactors, Jump Drives, Refineries, etc.), are now fetched directly from memory states.
+* **Extended Parameter Mapping:** Expanded the parsing spectrum to inventory 33 separate operational configuration states, dynamically classifying hardware parameters into structural pricing matrices, tactical weaponry modifiers, and automation processing baselines.
+* **Administrative Reload Command:** Integrated the chat argument `/salvage reload` allowing server administrators with verified access controls to forcefully invoke configuration synchronizations over active grid matrices mid-game without restarting server tasks.
+

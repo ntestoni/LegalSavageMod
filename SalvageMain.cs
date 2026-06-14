@@ -28,7 +28,7 @@ namespace SalvageMod
                     // Listen for global chat messages
                     MyAPIGateway.Utilities.MessageEntered += OnMessageEntered;
 
-                    // Boot and parse the external INI configuration subsystem
+                    // Load or generate the config file template
                     _modConfig.LoadOrCreateConfig();
 
                     _isInitialized = true;
@@ -54,81 +54,120 @@ namespace SalvageMod
 
         private void OnMessageEntered(string messageText, ref bool sendToEveryone)
         {
-            // Trigger command when a player types /salvage in chat
-            if (messageText.Equals("/salvage", StringComparison.OrdinalIgnoreCase))
+            if (messageText == null || !messageText.StartsWith("/salvage", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            // Hide the command processing from other active server clients
+            sendToEveryone = false;
+
+            try
             {
-                sendToEveryone = false; // Hide this command from other players in chat
-                CheckTargetGrid();
+                // Administrative runtime configuration reload handling
+                if (messageText.Equals("/salvage reload", StringComparison.OrdinalIgnoreCase))
+                {
+                    IMyPlayer player = MyAPIGateway.Session.Player;
+                    if (player == null || MyAPIGateway.Session.IsUserAdmin(player.SteamUserId))
+                    {
+                        _modConfig.LoadOrCreateConfig();
+                        MyAPIGateway.Utilities.ShowNotification("LegalSalvageMod: Configuration reloaded from INI.", 2000, MyFontEnum.Green);
+                        return;
+                    }
+                    else
+                    {
+                        MyAPIGateway.Utilities.ShowNotification("LegalSalvageMod: Error - Admin privileges required.", 2000, MyFontEnum.Red);
+                        return;
+                    }
+                }
+
+                // Call the raycast routine using the dynamic value fetched from config
+                IMyCubeGrid targetGrid = GetTargetGridFromCamera(_modConfig.RaycastRange);
+                if (targetGrid == null)
+                {
+                    ShowPopupMessage("SALVAGE ERROR", $"No grid in sight.\nPlease move closer to your target wreck (Max {_modConfig.RaycastRange} meters).");
+                    return;
+                }
+
+                ProcessSalvageRequest(targetGrid);
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Error during command interception: {ex.Message}");
             }
         }
 
-        private void CheckTargetGrid()
+        /// <summary>
+        /// Casts a camera ray vector forward using the dynamic configurations to acquire a grid look-at target.
+        /// </summary>
+        private IMyCubeGrid GetTargetGridFromCamera(double maxDistance)
         {
             // Get the local player's character entity
             IMyCharacter character = MyAPIGateway.Session?.Player?.Character;
-            if (character == null) return;
+            if (character == null) return null;
 
             // Retrieve current camera position and direction (supports both 1st and 3rd person views)
             MatrixD cameraMatrix = MyAPIGateway.Session.Camera.WorldMatrix;
-            Vector3D startPos = cameraMatrix.Translation;
+            Vector3D origin = cameraMatrix.Translation;
             Vector3D direction = cameraMatrix.Forward;
-            Vector3D endPos = startPos + (direction * 50.0); // 50-meter raycast range
+            Vector3D targetPoint = origin + (direction * maxDistance); // Raycast range
 
-            // Perform raycast against physical objects in line of sight
             IHitInfo hitInfo;
-            MyAPIGateway.Physics.CastRay(startPos, endPos, out hitInfo);
+            MyAPIGateway.Physics.CastRay(origin, targetPoint, out hitInfo);
 
             if (hitInfo != null && hitInfo.HitEntity is IMyCubeGrid)
             {
-                IMyCubeGrid targetGrid = (IMyCubeGrid)hitInfo.HitEntity;
+                return (IMyCubeGrid)hitInfo.HitEntity;
+            }
 
-                if (targetGrid.BigOwners == null || targetGrid.BigOwners.Count == 0)
-                {
-                    ShowPopupMessage("SALVAGE REPORT", "This wreck is unowned.\nYou can salvage it freely without paying any licensing fee!");
-                    return;
-                }
+            return null;
+        }
 
-                // --- Ownnership check
-                long playerId = MyAPIGateway.Session.Player.IdentityId;
-                long ownerId = targetGrid.BigOwners[0];
+        /// <summary>
+        /// Orchestrates structural analysis, faction relationship calculations, and banking operations.
+        /// </summary>
+        private void ProcessSalvageRequest(IMyCubeGrid targetGrid)
+        {
+            // --- Ownnership checks
+            if (targetGrid.BigOwners == null || targetGrid.BigOwners.Count == 0)
+            {
+                ShowPopupMessage("SALVAGE REPORT", "This wreck is unowned.\nYou can salvage it freely without paying any licensing fee!");
+                return;
+            }
 
-                // If the player already owns the grid, stop the transaction
-                if (ownerId == playerId)
-                {
-                    ShowPopupMessage("SALVAGE REPORT", "You already own this grid.\nNo salvage permit needed!");
-                    return;
-                }
+            long playerId = MyAPIGateway.Session.Player.IdentityId;
+            long ownerId = targetGrid.BigOwners[0];
 
-                IMyFaction ownerFaction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(ownerId);
+            // If the player already owns the grid, stop the transaction
+            if (ownerId == playerId)
+            {
+                ShowPopupMessage("SALVAGE REPORT", "You already own this grid.\nNo salvage permit needed!");
+                return;
+            }
 
-                if (ownerFaction == null)
-                {
-                    ShowPopupMessage("SALVAGE ERROR", "Unknown owner or invalid faction entity.");
-                    return;
-                }
+            IMyFaction ownerFaction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(ownerId);
 
-                if (!ownerFaction.IsEveryoneNpc())
-                {
-                    ShowPopupMessage("SALVAGE REJECTED", $"This grid belongs to a real player faction [{ownerFaction.Tag}].\nSalvage permit negotiations are unavailable.");
-                    return;
-                }
+            if (ownerFaction == null)
+            {
+                ShowPopupMessage("SALVAGE ERROR", "Unknown owner or invalid faction entity.");
+                return;
+            }
 
-                // --- Reputation wall
-                int reputation = MyAPIGateway.Session.Factions.GetReputationBetweenPlayerAndFaction(playerId, ownerFaction.FactionId);
+            if (!ownerFaction.IsEveryoneNpc())
+            {
+                ShowPopupMessage("SALVAGE REJECTED", $"This grid belongs to a real player faction [{ownerFaction.Tag}].\nSalvage permit negotiations are unavailable.");
+                return;
+            }
 
-                // If the player is hostile (reputation below -500), deny the contract
-                if (reputation < -500)
-                {
-                    ShowPopupMessage("TRANSACTION DENIED", $"The faction {ownerFaction.Name} [{ownerFaction.Tag}] refuses to negotiate with you.\nReason: Hostile standing (Reputation below -500).");
-                    return;
-                }
+            // --- Reputation wall
+            int reputation = MyAPIGateway.Session.Factions.GetReputationBetweenPlayerAndFaction(playerId, ownerFaction.FactionId);
+
+            // If the player is hostile (reputation below ReputationThreshold), deny the contract
+            if (reputation < _modConfig.ReputationThreshold)
+            {
+                ShowPopupMessage("TRANSACTION DENIED", $"The faction {ownerFaction.Name} [{ownerFaction.Tag}] refuses to negotiate with you.\nReason: Hostile standing (Reputation below {_modConfig.ReputationThreshold}).");
+                return;
+            }
 
                 ProcessSalvage(targetGrid, ownerFaction);
-            }
-            else
-            {
-                ShowPopupMessage("SALVAGE ERROR", "No grid in sight.\nPlease move closer to your target wreck (Max 50 meters).");
-            }
         }
 
         // --- UI HELPERS ---
@@ -153,13 +192,14 @@ namespace SalvageMod
 
             // Output parameters to be populated by the calculation engine
             int subGridCount;
-            float totalMass;
+            double totalMass;
 
             // Fetch base structural costs and UI telemetry data
             double totalCost = CalculateTotalStructureData(targetGrid, ownerFaction, out subGridCount, out totalMass);
 
             // Apply faction reputation dynamic modifiers
-            double reputationMod = Math.Max(0.5, Math.Min(3.0, 1.0 - (reputation / 1500.0)));
+            double reputationRescaled = 1.0 - (reputation / 1500.0);
+            double reputationMod = Math.Max(_modConfig.MinReputationModifier, Math.Min(_modConfig.MaxReputationModifier, reputationRescaled));
             long finalCost = (long)(totalCost * reputationMod);
             string formattedMass = totalMass.ToString("N0");
 
@@ -192,7 +232,7 @@ namespace SalvageMod
         }
 
         // --- CALCULATION ENGINE ---
-        private double CalculateTotalStructureData(IMyCubeGrid targetGrid, IMyFaction ownerFaction, out int subGridCount, out float totalMass)
+        private double CalculateTotalStructureData(IMyCubeGrid targetGrid, IMyFaction ownerFaction, out int subGridCount, out double totalMass)
         {
             // Retrieve the entire tree of physically connected grids
             var connectedGrids = new System.Collections.Generic.List<IMyCubeGrid>();
@@ -209,13 +249,13 @@ namespace SalvageMod
 
             // Compute telemetry output values for UI and Debugging
             subGridCount = connectedGrids.Count - 1;
-            totalMass = 0f;
             double totalCost = 0;
+            totalMass = 0;
 
             // Iterate through the grid structure tree leveraging specific cost routers
             foreach (var subGrid in connectedGrids)
             {
-                float subGridMass;
+                double subGridMass;
 
                 // Accumulate cost and extract individual sub-grid mass via the type router
                 totalCost += GetBaseCostByGridType(subGrid, ownerFaction, out subGridMass);
@@ -225,13 +265,13 @@ namespace SalvageMod
             // Add an overhead mechanical complexity tax for articulated assemblies
             if (connectedGrids.Count > 1)
             {
-                totalCost += (connectedGrids.Count - 1) * 2500.0;
+                totalCost += (connectedGrids.Count - 1) * _modConfig.ArticulatedAssemblyTax;
             }
 
             return totalCost;
         }
 
-        private double GetBaseCostByGridType(IMyCubeGrid subGrid, IMyFaction ownerFaction, out float gridMass)
+        private double GetBaseCostByGridType(IMyCubeGrid subGrid, IMyFaction ownerFaction, out double gridMass)
         {
             // Compute the owner of the current subGrid
             long majorityOwnerId = (subGrid.BigOwners != null && subGrid.BigOwners.Count > 0) ? subGrid.BigOwners[0] : 0;
@@ -240,8 +280,8 @@ namespace SalvageMod
             // This screens out player ships, trading stations, or third-party enemy grids
             if (!ownerFaction.IsMember(majorityOwnerId))
             {
-                gridMass = 0f;
-                return 0.0; // Costs nothing and weighs nothing
+                gridMass = 0;
+                return 0; // Costs nothing and weighs nothing
             }
 
             // Static structures (Physics engine disabled by default by VRAGE)
@@ -260,43 +300,43 @@ namespace SalvageMod
                     return CalculateSmallGridCost(subGrid, ownerFaction, out gridMass);
 
                 default:
-                    gridMass = 5000f;
-                    return 5000.0;
+                    gridMass = _modConfig.DefaultGridMass;
+                    return _modConfig.DefaultGridCost;
             }
         }
 
         // --- TYPE-SPECIFIC COST HANDLERS ---
-        private double CalculateSmallGridCost(IMyCubeGrid subGrid, IMyFaction ownerFaction, out float gridMass)
+        private double CalculateSmallGridCost(IMyCubeGrid subGrid, IMyFaction ownerFaction, out double gridMass)
         {
             // Configuration factors to scale pricing behavior for small grids
-            double costPerKg = 5.0;
+            double costPerKg = _modConfig.SmallGridCostPerKg;
             double smallGridScale = _modConfig.SmallGridScale;
-            float fallbackMass = 15000f;
+            double fallbackMass = _modConfig.SmallGridFallbackMass;
 
             // Delegate structural block scan and mass extraction to the core helper engine
             double specialBlocksCost = AnalyzeGridStructure(subGrid, ownerFaction, fallbackMass, smallGridScale, out gridMass);
             return (gridMass * costPerKg) + specialBlocksCost;
         }
 
-        private double CalculateLargeGridCost(IMyCubeGrid subGrid, IMyFaction ownerFaction, out float gridMass)
+        private double CalculateLargeGridCost(IMyCubeGrid subGrid, IMyFaction ownerFaction, out double gridMass)
         {
             // Configuration factors to scale pricing behavior for large grids
-            double costPerKg = 1.5;
+            double costPerKg = _modConfig.LargeGridCostPerKg;
             double largeGridScale = _modConfig.LargeGridScale;
-            float fallbackMass = 500000f;
+            double fallbackMass = _modConfig.LargeGridFallbackMass;
 
             // Delegate structural block scan and mass extraction to the core helper engine
             double specialBlocksCost = AnalyzeGridStructure(subGrid, ownerFaction, fallbackMass, largeGridScale, out gridMass);
             return (gridMass * costPerKg) + specialBlocksCost;
         }
 
-        private double CalculateStationCost(IMyCubeGrid subGrid, IMyFaction ownerFaction, out float gridMass)
+        private double CalculateStationCost(IMyCubeGrid subGrid, IMyFaction ownerFaction, out double gridMass)
         {
             // Configuration factors to scale pricing behavior for static outposts
-            double costPerKg = 0.8;
+            double costPerKg = _modConfig.StationCostPerKg;
             double stationScale = _modConfig.StationScale;
-            double stationTax = 75000.0;
-            float fallbackMass = 1200000f;
+            double stationTax = _modConfig.StationTax;
+            double fallbackMass = _modConfig.StationFallbackMass;
 
             // Delegate structural block scan and mass extraction to the core helper engine
             double specialBlocksCost = AnalyzeGridStructure(subGrid, ownerFaction, fallbackMass, stationScale, out gridMass);
@@ -310,48 +350,48 @@ namespace SalvageMod
             if (fatBlock == null) return 0.0;
 
             // 1. High-tier Power Generation & FTL
-            if (fatBlock is IMyReactor) return 150000.0;
-            if (fatBlock is IMyJumpDrive) return 250000.0;
-            if (fatBlock is IMyBatteryBlock) return 30000.0;
-            if (fatBlock is IMySolarPanel) return 10000.0;
+            if (fatBlock is IMyReactor) return _modConfig.PriceReactor;
+            if (fatBlock is IMyJumpDrive) return _modConfig.PriceJumpDrive;
+            if (fatBlock is IMyBatteryBlock) return _modConfig.PriceBattery;
+            if (fatBlock is IMySolarPanel) return _modConfig.PriceSolarPanel;
 
             // 2. Production & Advanced Logistics
-            if (fatBlock is IMyRefinery) return 90000.0;
-            if (fatBlock is IMyAssembler) return 45000.0;
-            if (fatBlock is IMyGasGenerator) return 20000.0; // H2/O2 Generator
-            if (fatBlock is IMyGasTank) return 15000.0;
-            if (fatBlock is IMyCargoContainer) return 25000.0;
-            if (fatBlock is IMyConveyorSorter) return 12000.0; // Added sorting systems
+            if (fatBlock is IMyRefinery) return _modConfig.PriceRefinery;
+            if (fatBlock is IMyAssembler) return _modConfig.PriceAssembler;
+            if (fatBlock is IMyGasGenerator) return _modConfig.PriceGasGenerator; // H2/O2 Generator
+            if (fatBlock is IMyGasTank) return _modConfig.PriceGasTank;
+            if (fatBlock is IMyCargoContainer) return _modConfig.PriceCargoContainer;
+            if (fatBlock is IMyConveyorSorter) return _modConfig.PriceConveyorSorter; // Sorting blocks
 
             // 3. Weapons & Defense (Covers vanilla and mods inheriting from core turret bases)
-            if (fatBlock is IMyLargeTurretBase) return 35000.0;
-            if (fatBlock is IMyUserControllableGun) return 15000.0; // Fixed guns/launchers
-            if (fatBlock is IMyWarhead) return 50000.0;
+            if (fatBlock is IMyLargeTurretBase) return _modConfig.PriceTurret;
+            if (fatBlock is IMyUserControllableGun) return _modConfig.PriceUserControllableGun; // Fixed guns/launchers
+            if (fatBlock is IMyWarhead) return _modConfig.PriceWarhead;
 
             // 4. Control Systems & Cockpits
-            if (fatBlock is IMyCockpit) return 20000.0; // Cryo pods, flight seats, cockpits
-            if (fatBlock is IMyRemoteControl) return 15000.0;
-            if (fatBlock is IMyBeacon) return 10000.0;
-            if (fatBlock is IMyRadioAntenna) return 12000.0;
+            if (fatBlock is IMyCockpit) return _modConfig.PriceCockpit; // Cryo pods, flight seats, cockpits
+            if (fatBlock is IMyRemoteControl) return _modConfig.PriceRemoteControl;
+            if (fatBlock is IMyBeacon) return _modConfig.PriceBeacon;
+            if (fatBlock is IMyRadioAntenna) return _modConfig.PriceRadioAntenna;
 
             // 5. Automation, Utility & Safety Locks
-            if (fatBlock is IMyShipConnector) return 8000.0;
-            if (fatBlock is IMyProjector) return 30000.0;
-            if (fatBlock is IMyProgrammableBlock) return 40000.0;
-            if (fatBlock is IMyTimerBlock) return 5000.0;
-            if (fatBlock is IMySensorBlock) return 5000.0;
-            if (fatBlock is IMyMedicalRoom) return 60000.0; // Medical rooms and survival kits
-            if (fatBlock is IMyAirVent) return 4000.0;
+            if (fatBlock is IMyShipConnector) return _modConfig.PriceShipConnector;
+            if (fatBlock is IMyProjector) return _modConfig.PriceProjector;
+            if (fatBlock is IMyProgrammableBlock) return _modConfig.PriceProgrammableBlock;
+            if (fatBlock is IMyTimerBlock) return _modConfig.PriceTimerBlock;
+            if (fatBlock is IMySensorBlock) return _modConfig.PriceSensorBlock;
+            if (fatBlock is IMyMedicalRoom) return _modConfig.PriceMedicalRoom; // Medical rooms and survival kits
+            if (fatBlock is IMyAirVent) return _modConfig.PriceAirVent;
 
             // 6. Basic Terminal Interfaces
-            if (fatBlock is IMyControlPanel) return 1500.0;
-            if (fatBlock is IMyButtonPanel) return 2500.0;
+            if (fatBlock is IMyControlPanel) return _modConfig.PriceControlPanel;
+            if (fatBlock is IMyButtonPanel) return _modConfig.PriceButtonPanel;
 
             // Any functional block not explicitly listed falls back to zero surcharge (mass only)
             return 0.0;
         }
 
-        private double AnalyzeGridStructure(IMyCubeGrid subGrid, IMyFaction ownerFaction, float fallbackMass, double scaleFactor, out float gridMass)
+        private double AnalyzeGridStructure(IMyCubeGrid subGrid, IMyFaction ownerFaction, double fallbackMass, double scaleFactor, out double gridMass)
         {
             gridMass = 0f;
             double specialBlocksCost = 0.0;
