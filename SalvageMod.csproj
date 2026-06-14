@@ -65,11 +65,12 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="SalvageConfig.cs" />
     <Compile Include="SalvageMain.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>xcopy "$(ProjectDir)SalvageMain.cs" "%25appdata%25\SpaceEngineers\Mods\LegalSalvageMod\Data\Scripts\LegalSalvageMod\" /Y /I</PostBuildEvent>
+    <PostBuildEvent>xcopy "$(ProjectDir)*.cs" "%25appdata%25\SpaceEngineers\Mods\LegalSalvageMod\Data\Scripts\LegalSalvageMod\" /Y /I</PostBuildEvent>
   </PropertyGroup>
 </Project>

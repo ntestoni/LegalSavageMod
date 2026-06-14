@@ -15,6 +15,9 @@ namespace SalvageMod
     {
         private bool _isInitialized = false;
 
+        // Instance of the external configuration system
+        private SalvageConfig _modConfig = new SalvageConfig();
+
         public override void UpdateAfterSimulation()
         {
             // Safe initialization (waits until the game world and APIs are ready)
@@ -24,6 +27,10 @@ namespace SalvageMod
                 {
                     // Listen for global chat messages
                     MyAPIGateway.Utilities.MessageEntered += OnMessageEntered;
+
+                    // Boot and parse the external INI configuration subsystem
+                    _modConfig.LoadOrCreateConfig();
+
                     _isInitialized = true;
                     MyLog.Default.WriteLineAndConsole("SalvageMod: Successfully initialized!");
                 }
@@ -263,7 +270,7 @@ namespace SalvageMod
         {
             // Configuration factors to scale pricing behavior for small grids
             double costPerKg = 5.0;
-            double smallGridScale = 1.0;
+            double smallGridScale = _modConfig.SmallGridScale;
             float fallbackMass = 15000f;
 
             // Delegate structural block scan and mass extraction to the core helper engine
@@ -275,7 +282,7 @@ namespace SalvageMod
         {
             // Configuration factors to scale pricing behavior for large grids
             double costPerKg = 1.5;
-            double largeGridScale = 1.0;
+            double largeGridScale = _modConfig.LargeGridScale;
             float fallbackMass = 500000f;
 
             // Delegate structural block scan and mass extraction to the core helper engine
@@ -287,7 +294,7 @@ namespace SalvageMod
         {
             // Configuration factors to scale pricing behavior for static outposts
             double costPerKg = 0.8;
-            double stationScale = 1.0;
+            double stationScale = _modConfig.StationScale;
             double stationTax = 75000.0;
             float fallbackMass = 1200000f;
 
