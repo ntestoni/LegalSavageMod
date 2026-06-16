@@ -25,6 +25,7 @@ namespace SalvageMod
         public double MinReputationModifier { get; private set; } = 0.5;
         public double MaxReputationModifier { get; private set; } = 3.0;
         public double ArticulatedAssemblyTax { get; private set; } = 2500.0;
+        public bool EnableDiagnosticOverlay { get; private set; } = true;
 
         // --- SECTION: GridMassMultipliers ---
         public double SmallGridScale { get; private set; } = 0.5;
@@ -100,6 +101,7 @@ namespace SalvageMod
                             MaxReputationModifier = iniParser.Get(SectionGeneral, "MaxReputationModifier").ToDouble(MaxReputationModifier);
                             ArticulatedAssemblyTax = iniParser.Get(SectionGeneral, "ArticulatedAssemblyTax").ToDouble(ArticulatedAssemblyTax);
                             StationTax = iniParser.Get(SectionGeneral, "StationTax").ToDouble(StationTax);
+                            EnableDiagnosticOverlay = iniParser.Get(SectionGeneral, "EnableDiagnosticOverlay").ToBoolean(EnableDiagnosticOverlay);
 
                             // SectionGridScales parsing
                             SmallGridScale = iniParser.Get(SectionGridScales, "SmallGridMultiplier").ToDouble(SmallGridScale);
@@ -182,6 +184,7 @@ namespace SalvageMod
             iniParser.Set(SectionGeneral, "MaxReputationModifier", MaxReputationModifier);
             iniParser.Set(SectionGeneral, "ArticulatedAssemblyTax", ArticulatedAssemblyTax);
             iniParser.Set(SectionGeneral, "StationTax", StationTax);
+            iniParser.Set(SectionGeneral, "EnableDiagnosticOverlay", EnableDiagnosticOverlay);
 
             // SectionGridScales serialization
             iniParser.Set(SectionGridScales, "SmallGridMultiplier", SmallGridScale);
@@ -237,6 +240,77 @@ namespace SalvageMod
             }
 
             MyLog.Default.WriteLineAndConsole("[LegalSavageMod] Configuration disk profile extended and synchronized.");
+        }
+
+        public void UpdateSetting(string section, string key, double value)
+        {
+            UpdateSettingValue(section, key, value);
+        }
+
+        public void UpdateSetting(string section, string key, int value)
+        {
+            UpdateSettingValue(section, key, value);
+        }
+
+        public void UpdateSetting(string section, string key, bool value)
+        {
+            UpdateSettingValue(section, key, value);
+        }
+
+        public void UpdateSetting(string section, string key, string value)
+        {
+            UpdateSettingValue(section, key, value);
+        }
+
+        private void UpdateSettingValue(string section, string key, object value)
+        {
+            try
+            {
+                var iniParser = new MyIni();
+                string fileContent = "";
+
+                if (MyAPIGateway.Utilities.FileExistsInLocalStorage(FileName, typeof(SalvageConfig)))
+                {
+                    using (TextReader reader = MyAPIGateway.Utilities.ReadFileInLocalStorage(FileName, typeof(SalvageConfig)))
+                    {
+                        fileContent = reader.ReadToEnd();
+                    }
+                }
+
+                MyIniParseResult result;
+                if (!string.IsNullOrEmpty(fileContent) && iniParser.TryParse(fileContent, out result))
+                {
+                    if (value is double)
+                        iniParser.Set(section, key, (double)value);
+                    else if (value is float)
+                        iniParser.Set(section, key, (float)value);
+                    else if (value is int)
+                        iniParser.Set(section, key, (int)value);
+                    else if (value is bool)
+                        iniParser.Set(section, key, (bool)value);
+                    else if (value is string)
+                        iniParser.Set(section, key, (string)value);
+                    else
+                        iniParser.Set(section, key, value.ToString());
+
+                    string outputText = iniParser.ToString();
+                    using (TextWriter writer = MyAPIGateway.Utilities.WriteFileInLocalStorage(FileName, typeof(SalvageConfig)))
+                    {
+                        writer.Write(outputText);
+                    }
+
+                    LoadOrCreateConfig();
+                }
+                else
+                {
+                    LoadOrCreateConfig();
+                    UpdateSettingValue(section, key, value);
+                }
+            }
+            catch (Exception ex)
+            {
+                MyLog.Default.WriteLineAndConsole($"[LegalSavageMod] Error updating setting: {ex.Message}");
+            }
         }
     }
 }

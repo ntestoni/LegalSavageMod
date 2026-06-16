@@ -2,7 +2,7 @@
 
 This document outlines the features and architecture that have been successfully developed, refactored, and integrated into the core codebase of the Legal Salvage Mod for *Space Engineers*.
 
-> **Development Note:** The core code and structural refactoring of this repository have been developed with the assistance of **Gemini (Large Language Model built by Google)**, optimizing for performance, API compliance, and clean code practices.
+> **Development Note:** The core code and structural refactoring of this repository have been developed with the assistance of **Gemini (Large Language Model built by Google - Gemini 3.5 Flash in 2026)**, optimizing for performance, API compliance, and clean code practices.
 
 ## 1. Chat Command & Target Acquisition System
 * **Chat Command Trigger:** Added a localized chat listener for the `/salvage` command. The command is intercepted and hidden from other players in the chat (`sendToEveryone = false`).
@@ -48,4 +48,15 @@ Upon a successful transaction and synchronous grid ownership transfer, a safety 
 * **Decoupled Financial Balancing:** Externalized runtime mathematical variables, replacing hardcoded coefficients in pricing engines. Dynamic multipliers for Small Grids, Large Grids, and Stations, alongside technological component surcharges (Reactors, Jump Drives, Refineries, etc.), are now fetched directly from memory states.
 * **Extended Parameter Mapping:** Expanded the parsing spectrum to inventory 33 separate operational configuration states, dynamically classifying hardware parameters into structural pricing matrices, tactical weaponry modifiers, and automation processing baselines.
 * **Administrative Reload Command:** Integrated the chat argument `/salvage reload` allowing server administrators with verified access controls to forcefully invoke configuration synchronizations over active grid matrices mid-game without restarting server tasks.
+
+## 10. In-Game Configuration Menu (Text HUD API Integration)
+* **Real-time Configuration Interface:** Built a robust interactive interface registered under the F2 Mod Menu (Text HUD API framework), dividing operational settings into dedicated subcategories.
+* **Text Field Value Editing:** Integrated input fields (`MenuTextInput` dialog boxes) that allow server administrators to modify any of the **38 public parameters** defined in `SalvageConfig` by typing values directly on their screens.
+* **Persistent Disk-Write & Live Reload:** Settings changed via the menu are parsed, validated, and directly written back to the `SalvageConfig.ini` file on disk. The script immediately triggers the config engine reloading mechanism, updating memory properties without modifying configuration setter visibilities (`private set`).
+* **Overlay Toggle Controls:** Added a checkbox control toggle in the F2 Player Menu for the HUD Diagnostic Overlay setting (`EnableDiagnosticOverlay`), preparing the configuration baseline for visual layout features.
+
+## 11. Menu Logic Refactoring (SalvageMenuConfig.cs)
+* **Separation of Concerns:** Extracted all F2 menu construction and registration logic from `SalvageMain.cs` into a dedicated helper class `SalvageMenuConfig`, improving maintainability and single-responsibility adherence.
+* **Constructor Dependency Injection:** `SalvageMenuConfig` receives the shared `SalvageConfig` instance through its constructor, keeping no static coupling with the session component.
+* **Delegation Pattern:** `SalvageMain` now instantiates `SalvageMenuConfig` and passes its `CreateModMenu` method as the HudAPIv2 callback, maintaining identical runtime behavior without code duplication.
 

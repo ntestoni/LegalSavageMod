@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Sandbox.ModAPI;
 using SpaceEngineers.Game.ModAPI;
 using VRage.Game.Components;
@@ -6,6 +6,7 @@ using VRage.Game.ModAPI;
 using VRage.Game;
 using VRage.Utils;
 using VRageMath;
+using Draygo.API;
 
 namespace SalvageMod
 {
@@ -17,6 +18,12 @@ namespace SalvageMod
 
         // Instance of the external configuration system
         private SalvageConfig _modConfig = new SalvageConfig();
+
+        // Manages construction and registration of the F2 configuration menu
+        private SalvageMenuConfig _menuConfig;
+
+        // Draygo's Text HUD API interface instance
+        private HudAPIv2 _hudApi;
 
         public override void UpdateAfterSimulation()
         {
@@ -31,6 +38,10 @@ namespace SalvageMod
                     // Load or generate the config file template
                     _modConfig.LoadOrCreateConfig();
 
+                    // Instantiate the menu manager and register its callback with the HUD API
+                    _menuConfig = new SalvageMenuConfig(_modConfig);
+                    _hudApi = new HudAPIv2(_menuConfig.CreateModMenu);
+
                     _isInitialized = true;
                     MyLog.Default.WriteLineAndConsole("SalvageMod: Successfully initialized!");
                 }
@@ -43,6 +54,13 @@ namespace SalvageMod
             if (MyAPIGateway.Utilities != null)
             {
                 MyAPIGateway.Utilities.MessageEntered -= OnMessageEntered;
+            }
+
+            // Close and clean up HUD API registers
+            if (_hudApi != null)
+            {
+                _hudApi.Close();
+                _hudApi = null;
             }
         }
 
@@ -617,6 +635,7 @@ namespace SalvageMod
                 }
             }
         }
+
 
     }
 }
