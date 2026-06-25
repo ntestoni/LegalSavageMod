@@ -60,3 +60,13 @@ Upon a successful transaction and synchronous grid ownership transfer, a safety 
 * **Constructor Dependency Injection:** `SalvageMenuConfig` receives the shared `SalvageConfig` instance through its constructor, keeping no static coupling with the session component.
 * **Delegation Pattern:** `SalvageMain` now instantiates `SalvageMenuConfig` and passes its `CreateModMenu` method as the HudAPIv2 callback, maintaining identical runtime behavior without code duplication.
 
+## 12. HUD Diagnostic Overlay (Real-Time Visual License Fee Breakdown)
+* **Background Update Loop:** Client-side updates execution running every 10 frames (approx. 6 times per second) executing raycasts to identify targeted grids. Skips execution completely when the user-toggle config `EnableDiagnosticOverlay` is disabled, or when running on dedicated servers to minimize load.
+* **Unified Telemetry Parsing:** Reuses existing mass and structure telemetry handlers to retrieve connected grids count, mass, standing, and pricing parameters. Exposes `CalculateTotalStructureData` internally.
+* **Text HUD API Visualization:** Draws a non-disruptive, real-time updated, left-mid screen overlay mapping:
+  - Targeted wreck name and owner faction (tag and name).
+  - Overall physical mass and connected sub-grids count.
+  - Active standing status (Friendly, Neutral, Hostile) and credit penalty/discounts.
+  - Final calculated Space Credits license fee.
+  - Special error states (Unowned grids display Free, player factions show negotiations unavailable, hostile factions show negotiation refused).
+

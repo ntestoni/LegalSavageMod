@@ -14,16 +14,26 @@ namespace SalvageMod
     [MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation)]
     public class SalvageMain : MySessionComponentBase
     {
+        public static SalvageMain Instance { get; private set; }
+
         private bool _isInitialized = false;
 
         // Instance of the external configuration system
         private SalvageConfig _modConfig = new SalvageConfig();
+
+        internal SalvageConfig Config => _modConfig;
 
         // Manages construction and registration of the F2 configuration menu
         private SalvageMenuConfig _menuConfig;
 
         // Draygo's Text HUD API interface instance
         private HudAPIv2 _hudApi;
+
+        internal HudAPIv2 HudApi => _hudApi;
+
+        // Service managing the HUD Diagnostic Overlay
+        private DiagnosticService _diagnosticService;
+        private int _tickCounter = 0;
 
         public override void UpdateAfterSimulation()
         {
@@ -32,6 +42,8 @@ namespace SalvageMod
             {
                 if (MyAPIGateway.Session != null && MyAPIGateway.Utilities != null)
                 {
+                    Instance = this;
+
                     // Listen for global chat messages
                     MyAPIGateway.Utilities.MessageEntered += OnMessageEntered;
 
@@ -42,18 +54,44 @@ namespace SalvageMod
                     _menuConfig = new SalvageMenuConfig(_modConfig);
                     _hudApi = new HudAPIv2(_menuConfig.CreateModMenu);
 
+                    // Initialize the diagnostic overlay service
+                    _diagnosticService = new DiagnosticService();
+
                     _isInitialized = true;
                     MyLog.Default.WriteLineAndConsole("SalvageMod: Successfully initialized!");
+                }
+                return;
+            }
+
+            // Exclude dedicated servers to minimize resource overhead and avoid API crashes
+            if (MyAPIGateway.Utilities.IsDedicated)
+                return;
+
+            _tickCounter++;
+            if (_tickCounter % 10 == 0)
+            {
+                if (_diagnosticService != null)
+                {
+                    _diagnosticService.Update();
                 }
             }
         }
 
         protected override void UnloadData()
         {
+            Instance = null;
+
             // Unregister events on exit to prevent potential memory leaks
             if (MyAPIGateway.Utilities != null)
             {
                 MyAPIGateway.Utilities.MessageEntered -= OnMessageEntered;
+            }
+
+            // Close and clean up Diagnostic Service overlay
+            if (_diagnosticService != null)
+            {
+                _diagnosticService.Close();
+                _diagnosticService = null;
             }
 
             // Close and clean up HUD API registers
@@ -250,7 +288,7 @@ namespace SalvageMod
         }
 
         // --- CALCULATION ENGINE ---
-        private double CalculateTotalStructureData(IMyCubeGrid targetGrid, IMyFaction ownerFaction, out int subGridCount, out double totalMass)
+        internal double CalculateTotalStructureData(IMyCubeGrid targetGrid, IMyFaction ownerFaction, out int subGridCount, out double totalMass)
         {
             // Retrieve the entire tree of physically connected grids
             var connectedGrids = new System.Collections.Generic.List<IMyCubeGrid>();

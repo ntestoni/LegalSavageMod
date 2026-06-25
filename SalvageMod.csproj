@@ -71,6 +71,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DiagnosticService.cs" />
     <Compile Include="HudAPIv2.cs" />
     <Compile Include="SalvageConfig.cs" />
     <Compile Include="SalvageMain.cs" />
